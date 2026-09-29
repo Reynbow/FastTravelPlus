@@ -1,0 +1,129 @@
+// The hotkey: the keys the MODS page slider offers, their names on the player's keyboard, and a thread that
+// counts presses of the chosen one. The script reads the count and decides what a press does, because it
+// knows which screen is up.
+//
+// The slider saves a position in this list, so the list only ever grows at the end.
+#include "common.h"
+#include <atomic>
+
+namespace ftp {
+
+static std::vector<HotkeyKey> g_keys;
+static std::atomic<int> g_hotkey{kDefaultHotkey};
+static std::atomic<uint32_t> g_presses{0};
+static std::atomic<ULONGLONG> g_downSince{0};  // when the current press started, 0 while the key is up
+
+// The characters a key types on the current layout, unshifted and shifted: "` ~" on a US keyboard.
+static std::wstring LayoutName(int vk) {
+    HKL layout = GetKeyboardLayout(0);
+    UINT sc = MapVirtualKeyExW((UINT)vk, MAPVK_VK_TO_VSC, layout);
+    BYTE state[256] = {};
+    wchar_t plain[8] = {}, shifted[8] = {};
+    // Flag 4: leave the keyboard's dead-key state alone. A dead key returns -1 with its spacing character.
+    int n1 = ToUnicodeEx((UINT)vk, sc, state, plain, 8, 4, layout);
+    state[VK_SHIFT] = 0x80;
+    int n2 = ToUnicodeEx((UINT)vk, sc, state, shifted, 8, 4, layout);
+    auto usable = [](int n, const wchar_t* s) { return (n == 1 || n == -1) && s[0] > L' ' && s[0] != 0x7f; };
+    std::wstring name;
+    if (usable(n1, plain)) name = std::wstring(1, plain[0]);
+    if (usable(n2, shifted) && shifted[0] != plain[0]) name += (name.empty() ? L"" : L" ") + std::wstring(1, shifted[0]);
+    if (!name.empty()) return name;
+    wchar_t text[64] = {};
+    if (sc && GetKeyNameTextW((LONG)(sc << 16), text, 64) > 0) return text;
+    wchar_t hex[16];
+    swprintf_s(hex, L"Key 0x%02X", vk);
+    return hex;
+}
+
+void BuildHotkeyList() {
+    std::vector<HotkeyKey> k;
+    auto add = [&](int vk, const std::wstring& name) { k.push_back({vk, Utf8(name)}); };
+    add(0, L"Off");
+    add(VK_OEM_3, LayoutName(VK_OEM_3));  // kDefaultHotkey: the key left of 1 (` ~ on US keyboards)
+    for (int i = 1; i <= 12; ++i) add(VK_F1 + i - 1, L"F" + std::to_wstring(i));
+    for (wchar_t c : std::wstring(L"1234567890")) add((int)c, std::wstring(1, c));
+    for (wchar_t c = L'A'; c <= L'Z'; ++c) add((int)c, std::wstring(1, c));
+    for (int vk : {VK_OEM_MINUS, VK_OEM_PLUS, VK_OEM_4, VK_OEM_6, VK_OEM_5, VK_OEM_1, VK_OEM_7, VK_OEM_COMMA,
+                   VK_OEM_PERIOD, VK_OEM_2, VK_OEM_102})
+        add(vk, LayoutName(vk));
+    add(VK_TAB, L"Tab");
+    add(VK_CAPITAL, L"Caps Lock");
+    add(VK_BACK, L"Backspace");
+    add(VK_INSERT, L"Insert");
+    add(VK_DELETE, L"Delete");
+    add(VK_HOME, L"Home");
+    add(VK_END, L"End");
+    add(VK_PRIOR, L"Page Up");
+    add(VK_NEXT, L"Page Down");
+    add(VK_UP, L"Up");
+    add(VK_DOWN, L"Down");
+    add(VK_LEFT, L"Left");
+    add(VK_RIGHT, L"Right");
+    for (int i = 0; i <= 9; ++i) add(VK_NUMPAD0 + i, L"Numpad " + std::to_wstring(i));
+    add(VK_DIVIDE, L"Numpad /");
+    add(VK_MULTIPLY, L"Numpad *");
+    add(VK_SUBTRACT, L"Numpad -");
+    add(VK_ADD, L"Numpad +");
+    add(VK_DECIMAL, L"Numpad .");
+    add(VK_SCROLL, L"Scroll Lock");
+    add(VK_PAUSE, L"Pause");
+    add(VK_MBUTTON, L"Middle mouse");
+    add(VK_XBUTTON1, L"Mouse 4");
+    add(VK_XBUTTON2, L"Mouse 5");
+    for (int i = 13; i <= 24; ++i) add(VK_F1 + i - 1, L"F" + std::to_wstring(i));
+    g_keys.swap(k);
+}
+
+const std::vector<HotkeyKey>& HotkeyList() { return g_keys; }
+
+int HotkeyIndex() { return g_hotkey.load(); }
+
+bool SetHotkeyIndex(int index) {
+    if (index < 0 || index >= (int)g_keys.size()) return false;
+    if (g_hotkey.exchange(index) != index) Log("Hotkey: %s", g_keys[index].name.c_str());
+    return true;
+}
+
+uint32_t HotkeyPresses() { return g_presses.load(); }
+
+uint32_t HotkeyHeldMs() {
+    const ULONGLONG since = g_downSince.load();
+    return since ? (uint32_t)std::min<ULONGLONG>(GetTickCount64() - since, 600000) : 0;
+}
+
+static bool GameHasFocus() {
+    HWND fg = GetForegroundWindow();
+    if (!fg) return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(fg, &pid);
+    return pid == GetCurrentProcessId();
+}
+
+static bool Down(int vk) { return vk && (GetAsyncKeyState(vk) & 0x8000) != 0; }
+
+static DWORD WINAPI HotkeyThread(void*) {
+    bool was = false;
+    for (;;) {
+        Sleep(15);
+        const int index = g_hotkey.load();
+        const int vk = index > 0 && index < (int)g_keys.size() ? g_keys[index].vk : 0;
+        // Ctrl/Alt/Windows combinations belong to the game or Windows, not to us.
+        const bool chord = Down(VK_CONTROL) || Down(VK_MENU) || Down(VK_LWIN) || Down(VK_RWIN);
+        const bool down = vk && GameHasFocus() && !chord && Down(vk);
+        if (down && !was) {
+            g_downSince = GetTickCount64();
+            ++g_presses;
+        } else if (!down) {
+            g_downSince = 0;
+        }
+        was = down;
+    }
+}
+
+void StartHotkey() {
+    HANDLE h = CreateThread(nullptr, 0, HotkeyThread, nullptr, 0, nullptr);
+    if (h) CloseHandle(h);
+    Log("Hotkey: %s (slider position %d of %zu)", g_keys[g_hotkey.load()].name.c_str(), g_hotkey.load(), g_keys.size());
+}
+
+}  // namespace ftp
