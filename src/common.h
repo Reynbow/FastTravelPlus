@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#define FTP_VERSION "1.2.0"
+#define FTP_VERSION "1.2.1"
 
 namespace ftp {
 

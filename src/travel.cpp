@@ -12,7 +12,7 @@
 
 namespace ftp {
 
-// ---- signatures (build 25472515); each one pins the structure offsets used below ----
+// ---- signatures (build 25472515, updated for 25600401); each one pins the structure offsets used below ----
 // heron::ui_system_menu::process_events body. It keeps rdx (GameplayMenuState&) as capture[0] (49 89 53 88).
 static const char* kSigMenuEvents =
     "4C 8B DC 53 48 81 EC 90 00 00 00 80 79 0C 00 48 8B D9 0F 84 80 00 00 00 48 8B 84 24 D0 00 00 00 49 89 43 90 "
@@ -28,10 +28,12 @@ static const size_t kTravelEventsPrologue = 18;
 // heron::fast_travel::check_interaction (a door): FastTravelRequest+0x10 = door id, then FastTravelState
 // event 0 (variant at +4, pending at +8).
 static const char* kSigDoor = "48 89 4A 10 41 80 78 08 00 74 14 41 80 78 04 00 74 17 41 C6 40 04 00";
-// heron::fast_travel::handle_request body: FastTravelRequest& in rcx.
+// heron::fast_travel::handle_request body: FastTravelRequest& in rcx. The 2026-10-01 game update clears a new
+// FastTravelRequest+0x18 ("a trip started this frame", set after it starts one) on entry; the registers the
+// arguments are moved to are wildcards.
 static const char* kSigRequest =
-    "48 89 5C 24 10 48 89 74 24 18 55 57 41 56 48 8D 6C 24 F0 48 81 EC 10 01 00 00 4D 8B F1 49 8B F0 48 8B F9 "
-    "80 79 08 00 0F 84";
+    "48 89 5C 24 10 48 89 74 24 18 55 57 41 56 48 8D 6C 24 F0 48 81 EC 10 01 00 00 4D 8B F1 49 8B ?? 48 8B ?? "
+    "C6 41 18 00 80 79 08 00 0F 84";
 static const size_t kRequestPrologue = 14;
 // Abandon(SavegameCache<HeaderChunk>&, SavegameCache& (return saves at +0xa0), SavegameState& (slot at +0x90),
 //         Ptr<TransitionRequest>&, int 0) -> bool

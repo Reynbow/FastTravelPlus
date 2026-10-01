@@ -8,7 +8,7 @@ HMODULE g_self = nullptr;
 std::wstring g_modDir;
 uintptr_t g_gameBase = 0;
 
-static const char* kKnownBuildSha = "2c6575be23ea9a2d316fb530d094773b371ab1da6344aa7a97b8cc2dabaf1ca0";
+static const char* kKnownBuildSha = "a2e8e57c86ea60f12de1fa628f8db12014eb296fb259449ea688df9c7ba1497a";  // build 25600401
 
 static void Setup() {
     LoadConfig();
@@ -41,7 +41,7 @@ static void Setup() {
         return;
     }
     Log("Game EXE SHA256=%s (%s)", sha.c_str(),
-        sha == kKnownBuildSha ? "known build 25472515" : "other build; running on signatures");
+        sha == kKnownBuildSha ? "known build 25600401" : "other build; running on signatures");
 
     BuildHotkeyList();
     if (g_cfg.hotkey >= 0 && !SetHotkeyIndex(g_cfg.hotkey))
