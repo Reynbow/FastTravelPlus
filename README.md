@@ -7,14 +7,14 @@ Download and install instructions are on Nexus Mods (search for FastTravelPlus i
 ## Features
 
 - A Fast Travel entry in the map screen's action bar.
-- Keyboard and controller hotkeys (Xbox and PlayStation controllers, with or without Steam Input).
+- Keyboard and controller hotkeys, set on the MODS page by pressing the key or button (Xbox and PlayStation controllers, with or without Steam Input).
 - The game's own fast travel menu, destinations and trip.
 - Mission check: in a mission it asks first, then abandons the mission the game's own way before you travel.
 
 ## Requirements (to play)
 
 - [f2g DLL Mod Loader (crloader)](https://www.nexusmods.com/controlresonant/mods/9)
-- [Mod Settings Menu](https://www.nexusmods.com/controlresonant/mods/35)
+- [Mod Settings Menu](https://www.nexusmods.com/controlresonant/mods/35) 1.7.1 or later
 
 ## Building
 

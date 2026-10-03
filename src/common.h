@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#define FTP_VERSION "1.2.1"
+#define FTP_VERSION "1.3.0"
 
 namespace ftp {
 
@@ -33,41 +33,48 @@ bool QueryParam(const char* query, const char* key, std::string& out);
 std::string JsonEscape(const std::string& s);
 
 // ---- configuration (config.cpp) ----
+// The hotkeys are Mod Settings Menu key options (menu 1.7.1), saved in ModMenuConfig\<descriptor id>.ini as key codes:
+// 0 = unbound, 3..254 = keyboard and mouse virtual-key codes, 256..271 = pad buttons (255 + PadButtonName's index).
 struct Config {
     bool enabled = true;
     bool diagnostics = false;  // extra log lines from the DLL and the script
-    int hotkey = -1;           // slider position saved by Mod Settings Menu (ModMenuConfig), -1 = not saved
-    int padHold = -1, padPress = -1;  // the controller section's saved slider positions, -1 = not saved
+    int hotkey = -1;           // the keyboard key option's saved key code, -1 = not saved
+    int padHold = -1, padPress = -1;  // the controller key options' saved button codes, -1 = not saved
 };
 extern Config g_cfg;
 void LoadConfig();
+// 1.2.x saved slider positions under other ids. Writes each one as its key option's code, once; true if any moved.
+bool CarryOverSliders();
 
 // ---- hotkey (keys.cpp) ----
-struct HotkeyKey {
-    int vk;            // virtual-key code, 0 = off
-    std::string name;  // as shown on the MODS page, in the player's keyboard layout
-};
-const int kDefaultHotkey = 1;  // the key left of 1: ` ~ on US keyboards
-void BuildHotkeyList();        // the MODS page slider's keys, by position
-const std::vector<HotkeyKey>& HotkeyList();
-int HotkeyIndex();
-bool SetHotkeyIndex(int index);
+const int kDefaultHotkeyVk = VK_OEM_3;  // the key left of 1: ` ~ on US keyboards
+const int kSliderPositions = 106;       // 1.2.x's hotkey slider: 0 = Off, then 105 keys
+void BuildKeyNames();                   // every key's name on the player's keyboard layout, for the script
+std::string KeyName(int vk);            // "` ~", "F6", "Mouse 4"; "" for 0
+int HotkeyFromSliderPosition(int position);  // 1.2.x's slider position as a key code, -1 if not a position
+int HotkeyVk();
+bool SetHotkeyVk(int code);             // 0 (off) or a keyboard or mouse key code (3..254)
 uint32_t HotkeyPresses();      // counts presses while the game has focus
 uint32_t HotkeyHeldMs();       // how long the current press has lasted, 0 while the key is up
 void StartHotkey();
 
 // ---- controller hotkey (pad.cpp) ----
-const int kPadDefaultHold = 11;   // LS (L3)
-const int kPadDefaultPress = 12;  // RS (R3)
-int PadButtonCount();             // slider positions: 0 = None (Hold) / Off (Press), then the 16 buttons
+const int kPadDefaultHold = 11;   // LS (L3): code 266
+const int kPadDefaultPress = 12;  // RS (R3): code 267
+const int kPadCodeBase = 255;     // a pad button's key code is kPadCodeBase + its index (A = 256 ... D-pad Right = 271)
+int PadButtonCount();             // indices: 0 = none, then the 16 buttons
 std::string PadButtonName(int index);
-int PadHold();
+int PadCodeFromSliderPosition(int position);  // 1.2.x's controller slider position as a button code, -1 if not one
+int PadHold();                    // the buttons by index (0 = none)
 int PadPress();
+int PadHoldCode();                // the same as key codes (0 = none)
+int PadPressCode();
 bool SetPadCombo(int hold, int press);
+bool SetPadCodes(int holdCode, int pressCode);  // each 0 (none) or a pad button code (256..271)
 uint32_t PadPresses();            // counts combo presses while the game has focus
 uint32_t PadHeldMs();             // how long the combo has been held, 0 while it's off
 void StartPad();
-// One DualSense / DualShock 4 input report to the button bits (1 << slider position); for the tests too.
+// One DualSense / DualShock 4 input report to the button bits (1 << button index); for the tests too.
 bool ParseSonyReport(uint16_t pid, size_t reportLength, const uint8_t* d, size_t n, uint32_t& buttons);
 
 // ---- pristine game image (image.cpp) ----

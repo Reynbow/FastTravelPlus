@@ -3,8 +3,8 @@
   "id": "fasttravelplus",
   "name": "FastTravelPlus: Keyboard",
   "options": [
-    {"id": "hotkey", "type": "slider", "default": 1, "min": 0, "max": 105, "step": 1,
+    {"id": "travel_key", "type": "key", "device": "keyboard", "default": 192, "context": "gameplay", "conflict": "warn",
      "label": "Fast travel hotkey",
-     "description": "Opens fast travel from anywhere while you play, the same as Fast Travel on the map. Press it again to close the fast travel menu.\n\nDrag the slider, or use left and right, to pick a key. Its name shows next to the slider. All the way left turns the hotkey off.\n\nIn a mission, the first press asks. Then hold it for 5 seconds to abandon the mission and fast travel.\n\nThe default is the key left of 1 (` and ~ on US keyboards). For a controller, see FastTravelPlus: Controller."}
+     "description": "Opens fast travel from anywhere while you play, the same as Fast Travel on the map. Press it again to close the fast travel menu. Unbound turns the hotkey off.\n\nIn a mission, the first press asks. Then hold it for 5 seconds to abandon the mission and fast travel.\n\nThe default is the key left of 1 (` and ~ on US keyboards). For a controller, see FastTravelPlus: Controller."}
   ]
 }

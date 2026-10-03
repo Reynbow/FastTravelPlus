@@ -3,7 +3,8 @@
 // work without Steam Input too. Both are read-only and shared with the game. Like the keyboard hotkey, the DLL
 // only counts presses; the script decides what a press does.
 //
-// The MODS page sliders save positions in kPadButtons, so the list only ever grows at the end.
+// Mod Settings Menu's key options save a button as kPadCodeBase + its index in kPadButtons (A = 256 ... D-pad Right
+// = 271), the menu's own order. 1.2.x's sliders saved the index itself.
 #include "common.h"
 #include <atomic>
 #include <setupapi.h>
@@ -15,7 +16,7 @@
 
 namespace ftp {
 
-// Position 0 is "None" on the Hold slider and "Off" on the Press slider.
+// Index 0 is no button: no Hold button (a single-button hotkey), or no Press button (the controller hotkey off).
 static const char* kPadButtons[] = {"",           "A (Cross)",       "B (Circle)",       "X (Square)",
                                     "Y (Triangle)", "LB (L1)",         "RB (R1)",          "LT (L2)",
                                     "RT (R2)",     "View (Create)",   "Menu (Options)",   "LS (L3)",
@@ -55,6 +56,24 @@ bool SetPadCombo(int hold, int press) {
     const bool changed = g_hold.exchange(hold) != hold;
     if (g_press.exchange(press) != press || changed) Log("Controller hotkey: %s", ComboName(hold, press).c_str());
     return true;
+}
+
+// Key codes: 0 = no button, 256..271 = the buttons.
+static int IndexOfCode(int code) {
+    return code == 0 ? 0 : code > kPadCodeBase && code < kPadCodeBase + kPadCount ? code - kPadCodeBase : -1;
+}
+static int CodeOfIndex(int index) { return index > 0 ? kPadCodeBase + index : 0; }
+int PadHoldCode() { return CodeOfIndex(g_hold.load()); }
+int PadPressCode() { return CodeOfIndex(g_press.load()); }
+
+bool SetPadCodes(int holdCode, int pressCode) {
+    const int hold = IndexOfCode(holdCode), press = IndexOfCode(pressCode);
+    return hold >= 0 && press >= 0 && SetPadCombo(hold, press);
+}
+
+// 1.2.x's sliders saved the index itself (0 = none).
+int PadCodeFromSliderPosition(int position) {
+    return position >= 0 && position < kPadCount ? CodeOfIndex(position) : -1;
 }
 
 // ---- XInput (Xbox-style pads, and PlayStation pads through Steam Input) ----

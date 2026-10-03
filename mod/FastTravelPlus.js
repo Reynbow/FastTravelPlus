@@ -13,10 +13,18 @@
     var LOG_URL = 'coui://base/__fasttravelplus_log__.json';
     var STYLE_ID = 'ftp-style';
     var ICON = 'coui://base/uiresources/game/symbols/district_upgrades/ICN_DISTRICT_UPGRADE_FAST_TRAVEL.svg';
-    var MOD_ID = 'fasttravelplus', HOTKEY_OPTION = 'hotkey';
-    var MOD_PAD = 'fasttravelplus_controller', PAD_HOLD = 'pad_hold', PAD_PRESS = 'pad_press';
-    var KEYS = C.keys || [];           // the hotkey slider's key names, by position (0 = Off)
-    var PAD = C.pad || [];             // the controller sliders' button names, by position (0 = None / Off)
+    // Mod Settings Menu key options (menu 1.7.1). They hold key codes: 0 = unbound, 3..254 = keyboard and mouse keys,
+    // 256..271 = pad buttons.
+    var MOD_ID = 'fasttravelplus', KEY_OPTION = 'travel_key';
+    var MOD_PAD = 'fasttravelplus_controller', HOLD_OPTION = 'hold_button', PRESS_OPTION = 'press_button';
+    var KEY_NAMES = C.keyNames || {};  // keyboard and mouse key names by code, on the player's layout (from the DLL)
+    // Pad buttons by code - 256, named the way Mod Settings Menu names them for the pad in use.
+    var PAD_NAMES = {
+        xbox: ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'View', 'Menu', 'LS', 'RS', 'D-pad Up', 'D-pad Down',
+            'D-pad Left', 'D-pad Right'],
+        playstation: ['Cross', 'Circle', 'Square', 'Triangle', 'L1', 'R1', 'L2', 'R2', 'Create', 'Options', 'L3', 'R3',
+            'D-pad Up', 'D-pad Down', 'D-pad Left', 'D-pad Right']
+    };
     var TICK_MS = 100;
     // In a mission, a hotkey goes ahead only when held this long, in a press that starts after the question
     // came up; the in-play prompt goes away after PROMPT_IDLE_MS without a hold.
@@ -60,7 +68,6 @@
         return typeof t === 'string' && t ? t : d;
     }
     function now() { return Date.now(); }
-    function hex(s) { var o = ''; for (var i = 0; i < s.length; i++) o += ('0' + s.charCodeAt(i).toString(16)).slice(-2); return o; }
     function connected(n) { for (var i = 0; n && i < 128; i++, n = n.parentNode) if (n === document.body) return true; return false; }
     function el(tag, cls, text) {
         var n = document.createElement(tag);
@@ -119,35 +126,35 @@
     }
 
     // ---------------------------------------------------------------- the hotkeys
-    // The sliders' positions live in Mod Settings Menu (window.CMM); without it, the DLL's saved values.
-    function menuPosition(mod, key, count, fallback) {
+    function isKey(c) { return c === 0 || (c >= 3 && c <= 254); }
+    function isPad(c) { return c === 0 || (c >= 256 && c <= 271); }
+    // A key option's code as Mod Settings Menu (window.CMM) has it; undefined without the menu or for a bad value.
+    function menuValue(mod, option, valid) {
         var v;
-        try { if (window.CMM && typeof window.CMM.value === 'function') v = window.CMM.value(mod, key); } catch (e) { v = undefined; }
-        if (typeof v === 'number' && isFinite(v) && Math.round(v) >= 0 && Math.round(v) < count) return Math.round(v);
-        return fallback;
+        try { if (window.CMM && typeof window.CMM.value === 'function') v = window.CMM.value(mod, option); } catch (e) { v = undefined; }
+        return typeof v === 'number' && isFinite(v) && valid(Math.round(v)) ? Math.round(v) : undefined;
     }
-    function hotkeyIndex() { return menuPosition(MOD_ID, HOTKEY_OPTION, KEYS.length, typeof C.hotkey === 'number' ? C.hotkey : 1); }
-    function padHoldIndex() { return menuPosition(MOD_PAD, PAD_HOLD, PAD.length, typeof C.padHold === 'number' ? C.padHold : 11); }
-    function padPressIndex() { return menuPosition(MOD_PAD, PAD_PRESS, PAD.length, typeof C.padPress === 'number' ? C.padPress : 12); }
-    function hotkeyName() { var i = hotkeyIndex(); return i > 0 && KEYS[i] ? KEYS[i] : ''; }
-    function padName(i) { return i > 0 && PAD[i] ? PAD[i] : ''; }
-    // "LS (L3) + RS (R3)", or one button when Hold is None; '' when the controller hotkey is off.
-    function comboName() {
-        var p = padPressIndex(), h = padHoldIndex();
-        if (!padName(p)) return '';
-        return (padName(h) ? padName(h) + ' + ' : '') + padName(p);
+    function codeName(c) {
+        if (c >= 256 && c <= 271) return PAD_NAMES[model('ui_input_active_controller_gamepad_type', 0) === 2 ? 'playstation' : 'xbox'][c - 256];
+        return c > 0 ? KEY_NAMES[c] || 'Key ' + c : '';
     }
+    function hotkeyName() { return codeName(hk.key); }
+    // "LS + RS", or one button when Hold is unbound; '' when the controller hotkey is off.
+    function comboName() { return hk.press ? (hk.hold ? codeName(hk.hold) + ' + ' : '') + codeName(hk.press) : ''; }
     function inputName(source) { return source === 'pad' ? comboName() : hotkeyName(); }
     function withKey(s, source) {
         var names = source ? [inputName(source)] : [hotkeyName(), comboName()];
         return s.replace('{key}', names.filter(function (n) { return n; }).join(' or '));
     }
 
-    // The DLL counts presses of each and times the current one; a poll picks up new presses and hold times, and
-    // tells the DLL when a slider moved.
+    // The DLL counts presses of each and times the current one; a poll picks up new presses and hold times. hk.key,
+    // hk.hold and hk.press are the codes the DLL uses: it starts with the saved ones. menu has the menu's values as
+    // first seen, and only a change from those goes to the DLL, so a menu that read its file before the DLL carried
+    // 1.2.x's slider settings over can't undo that.
     var hk = { presses: null, padPresses: null, keyHeld: 0, padHeld: 0, polling: false,
-        sent: typeof C.hotkey === 'number' ? C.hotkey : null,
-        sentHold: typeof C.padHold === 'number' ? C.padHold : null, sentPress: typeof C.padPress === 'number' ? C.padPress : null };
+        key: typeof C.hotkey === 'number' ? C.hotkey : 192,
+        hold: typeof C.padHold === 'number' ? C.padHold : 266, press: typeof C.padPress === 'number' ? C.padPress : 267 };
+    var menu = { key: undefined, hold: undefined, press: undefined };
     function fresh(field, value) {
         if (typeof value !== 'number') return false;
         var last = hk[field];
@@ -156,20 +163,29 @@
     }
     function pollHotkey() {
         if (hk.polling) return;
-        var index = hotkeyIndex(), hold = padHoldIndex(), press = padPressIndex();
-        var action = index !== hk.sent ? 'hotkey&k=' + index
-            : hold !== hk.sentHold || press !== hk.sentPress ? 'pad&h=' + hold + '&p=' + press : 'status';
+        var key = menuValue(MOD_ID, KEY_OPTION, isKey), hold = menuValue(MOD_PAD, HOLD_OPTION, isPad),
+            press = menuValue(MOD_PAD, PRESS_OPTION, isPad);
+        if (menu.key === undefined) menu.key = key;
+        if (menu.hold === undefined) menu.hold = hold;
+        if (menu.press === undefined) menu.press = press;
+        var padMoved = (hold !== undefined && hold !== menu.hold) || (press !== undefined && press !== menu.press);
+        var h = hold !== undefined ? hold : hk.hold, p = press !== undefined ? press : hk.press;
+        var action = key !== undefined && key !== menu.key ? 'hotkey&k=' + key : padMoved ? 'pad&h=' + h + '&p=' + p : 'status';
         hk.polling = true;
         getJson(URL + '?a=' + action + '&n=' + (++nonce), function (r) {
             hk.polling = false;
-            if (!r || !r.ok) return;
-            if (action.indexOf('hotkey') === 0 && r.accepted) { hk.sent = index; log('hotkey: ' + (KEYS[index] || index)); }
-            if (action.indexOf('pad') === 0 && r.accepted) { hk.sentHold = hold; hk.sentPress = press; log('controller hotkey: ' + (comboName() || 'off')); }
+            if (!r || !r.ok) return;  // no answer: asked again on the next tick
+            if (typeof r.hotkey === 'number') hk.key = r.hotkey;
+            if (typeof r.padHold === 'number') hk.hold = r.padHold;
+            if (typeof r.padPress === 'number') hk.press = r.padPress;
+            // A refusal (a code the menu wouldn't store) isn't asked again.
+            if (action.indexOf('hotkey') === 0) { menu.key = key; log('hotkey: ' + (r.accepted ? hotkeyName() || 'off' : 'refused ' + key), !r.accepted); }
+            if (action.indexOf('pad') === 0) { menu.hold = h; menu.press = p; log('controller hotkey: ' + (r.accepted ? comboName() || 'off' : 'refused ' + h + ' + ' + p), !r.accepted); }
             hk.keyHeld = typeof r.keyHeld === 'number' ? r.keyHeld : 0;
             hk.padHeld = typeof r.padHeld === 'number' ? r.padHeld : 0;
-            var key = fresh('presses', r.presses), pad = fresh('padPresses', r.padPresses);
-            if (key && hotkeyIndex() > 0) onHotkey('key');
-            else if (pad && padPressIndex() > 0) onHotkey('pad');
+            var k = fresh('presses', r.presses), pad = fresh('padPresses', r.padPresses);
+            if (k && hk.key > 0) onHotkey('key');
+            else if (pad && hk.press > 0) onHotkey('pad');
         }, 1000);
     }
 
@@ -338,8 +354,8 @@
     // How long a hotkey has been held, in a press that started after the question came up.
     function holding() {
         var ms = 0;
-        if (hotkeyIndex() > 0 && hk.presses > ui.basePresses) ms = Math.max(ms, hk.keyHeld);
-        if (padPressIndex() > 0 && hk.padPresses > ui.basePadPresses) ms = Math.max(ms, hk.padHeld);
+        if (hk.key > 0 && hk.presses > ui.basePresses) ms = Math.max(ms, hk.keyHeld);
+        if (hk.press > 0 && hk.padPresses > ui.basePadPresses) ms = Math.max(ms, hk.padHeld);
         return ms;
     }
 
@@ -419,60 +435,6 @@
         }
     }
 
-    // ---------------------------------------------------------------- the MODS page
-    // Mod Settings Menu shows our sliders' positions as numbers; next to each slider we show the key or
-    // button's name instead, in a copy of the number's element that follows its classes (focus and section
-    // colours). Mod Settings Menu names an option cmm_<hex of the mod id>_<hex of the option id>.
-    function binding(mod, option) { return 'cmm_' + hex(mod) + '_' + hex(option); }
-    var sliders = [
-        { binding: binding(MOD_ID, HOTKEY_OPTION), name: function () { return KEYS[hotkeyIndex()] || ''; } },
-        { binding: binding(MOD_PAD, PAD_HOLD), name: function () { return padName(padHoldIndex()) || 'None'; } },
-        { binding: binding(MOD_PAD, PAD_PRESS), name: function () { return padName(padPressIndex()) || 'Off'; } }
-    ];
-    sliders.forEach(function (s) { s.src = null; s.el = null; });
-    var sliderSearch = 0;
-    function sliderFor(node) {
-        var at = node.attributes;
-        for (var j = 0; at && j < at.length; j++) {
-            var v = at[j] && at[j].value;
-            if (typeof v !== 'string' || v.indexOf('cmm_') === -1) continue;
-            for (var k = 0; k < sliders.length; k++) if (v.indexOf(sliders[k].binding + '_') !== -1) return sliders[k];
-        }
-        return null;
-    }
-    function tickSlider(t) {
-        var open = model('ui_stacks_menu_options_active', false) && model('ui_stacks_menu_options_states_mods_active', false);
-        if (!open) return;
-        var missing = false;
-        sliders.forEach(function (s) {
-            if (s.src && !connected(s.src)) s.src = s.el = null;
-            missing = missing || !s.src;
-        });
-        if (missing && t - sliderSearch >= 300) {
-            sliderSearch = t;
-            var values = document.querySelectorAll('.options-slider__value');
-            for (var i = 0; i < values.length; i++) {
-                var s = sliderFor(values[i]);
-                if (!s || s.src || !values[i].parentNode) continue;
-                // A page copy taken while ours showed has an old name in it: out, and the number back.
-                var old = values[i].parentNode.querySelectorAll('.ftp-key');
-                for (var j = 0; j < old.length; j++) remove(old[j]);
-                s.src = values[i];
-                s.el = el('div');
-                values[i].parentNode.insertBefore(s.el, values[i].nextSibling);
-                log('slider found: ' + s.binding);
-            }
-        }
-        sliders.forEach(function (s) {
-            if (!s.src) return;
-            var cls = s.src.className + ' ftp-key';
-            if (s.el.className !== cls) s.el.className = cls;
-            var name = s.name();
-            if (s.el.textContent !== name) s.el.textContent = name;
-            if (s.src.style.display !== 'none') s.src.style.display = 'none';
-        });
-    }
-
     // ---------------------------------------------------------------- main loop
     var lastMap = null;
     function tick() {
@@ -484,7 +446,6 @@
             ensureButton(mapOpen);
             tickModal(t, mapOpen);
             tickFollow(t);
-            tickSlider(t);
         } catch (e) {
             log('tick error: ' + (e && e.stack || e), true);
         }
@@ -499,7 +460,6 @@
         version: C.version,
         stop: function () {
             clearInterval(timer); closeModal(); remove(ui.button);
-            sliders.forEach(function (s) { remove(s.el); if (s.src) s.src.style.display = ''; });
             remove(document.getElementById(STYLE_ID));
         },
         state: function () {

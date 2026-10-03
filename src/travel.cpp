@@ -294,8 +294,8 @@ static std::string StatusJson(bool accepted) {
               g_installed.load() && !g_faulted.load() ? "true" : "false", accepted ? "true" : "false",
               Age(g_menuSeen.load(), now), Age(g_travelSeen.load(), now), Age(g_requestSeen.load(), now), saves,
               saves > 0 ? "true" : "false", (g_want.load() != kWantNone || g_phase.load() != kIdle) ? "true" : "false",
-              g_serial.load(), kResultNames[g_result.load()], Age(g_abandonedAt.load(), now), HotkeyIndex(),
-              HotkeyPresses(), HotkeyHeldMs(), PadHold(), PadPress(), PadPresses(), PadHeldMs());
+              g_serial.load(), kResultNames[g_result.load()], Age(g_abandonedAt.load(), now), HotkeyVk(),
+              HotkeyPresses(), HotkeyHeldMs(), PadHoldCode(), PadPressCode(), PadPresses(), PadHeldMs());
     return buf;
 }
 
@@ -317,18 +317,18 @@ std::string TravelAction(const std::string& action, const char* query) {
         g_abandonedAt = 0;
         accepted = true;
     } else if (action == "hotkey") {
-        // The MODS page slider moved: its new position, so the key works without a restart.
+        // The keyboard key option changed on the MODS page: its key code, so the key works without a restart.
         std::string k;
         bool digits = QueryParam(query, "k", k) && !k.empty() && k.size() <= 4;
         for (char c : k) digits = digits && c >= '0' && c <= '9';
-        accepted = digits && SetHotkeyIndex(atoi(k.c_str()));
+        accepted = digits && SetHotkeyVk(atoi(k.c_str()));
     } else if (action == "pad") {
-        // A controller slider moved: the Hold and Press positions.
+        // A controller key option changed: the Hold and Press button codes.
         std::string h, p;
         bool digits = QueryParam(query, "h", h) && QueryParam(query, "p", p) && !h.empty() && !p.empty() &&
                       h.size() <= 3 && p.size() <= 3;
         for (char c : h + p) digits = digits && c >= '0' && c <= '9';
-        accepted = digits && SetPadCombo(atoi(h.c_str()), atoi(p.c_str()));
+        accepted = digits && SetPadCodes(atoi(h.c_str()), atoi(p.c_str()));
     }
     return StatusJson(accepted);
 }
@@ -338,17 +338,17 @@ std::string BuildConfigJs() {
     js += g_cfg.diagnostics ? "1" : "0";
     js += ",hooks:";
     js += g_installed.load() ? "1" : "0";
-    // The hotkey slider's keys by position, named for the player's keyboard, and the current one.
-    js += ",hotkey:" + std::to_string(HotkeyIndex()) + ",keys:[";
-    const std::vector<HotkeyKey>& keys = HotkeyList();
-    for (size_t i = 0; i < keys.size(); ++i) {
-        if (i) js += ',';
-        js += "\"" + JsonEscape(keys[i].name) + "\"";
+    // The current key codes, and every keyboard and mouse key's name on the player's layout, for the prompts.
+    js += ",hotkey:" + std::to_string(HotkeyVk()) + ",keyNames:{";
+    bool first = true;
+    for (int vk = 3; vk <= 254; ++vk) {
+        const std::string name = KeyName(vk);
+        if (name.empty()) continue;
+        if (!first) js += ',';
+        first = false;
+        js += std::to_string(vk) + ":\"" + JsonEscape(name) + "\"";
     }
-    // The controller sliders' buttons by position (0: None on Hold, Off on Press) and the current combo.
-    js += "],padHold:" + std::to_string(PadHold()) + ",padPress:" + std::to_string(PadPress()) + ",pad:[\"\"";
-    for (int i = 1; i < PadButtonCount(); ++i) js += ",\"" + JsonEscape(PadButtonName(i)) + "\"";
-    js += "]};";
+    js += "},padHold:" + std::to_string(PadHoldCode()) + ",padPress:" + std::to_string(PadPressCode()) + "};";
     return js;
 }
 

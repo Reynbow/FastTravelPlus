@@ -3,11 +3,11 @@
   "id": "fasttravelplus_controller",
   "name": "FastTravelPlus: Controller",
   "options": [
-    {"id": "pad_hold", "type": "slider", "default": 11, "min": 0, "max": 16, "step": 1,
+    {"id": "hold_button", "type": "key", "device": "pad", "default": 266, "context": "gameplay", "conflict": "warn",
      "label": "Hold button",
-     "description": "The controller hotkey is two buttons: hold this one and press the one below. Together they open fast travel from anywhere while you play, the same as the keyboard hotkey, and close it again.\n\nNone makes the hotkey a single press of the button below.\n\nThe default is the left stick pressed in (LS, L3 on PlayStation). Buttons show their Xbox name with the PlayStation one in brackets."},
-    {"id": "pad_press", "type": "slider", "default": 12, "min": 0, "max": 16, "step": 1,
+     "description": "The controller hotkey is two buttons: hold this one and press the one below. Together they open fast travel from anywhere while you play, the same as the keyboard hotkey, and close it again.\n\nUnbound makes the hotkey a single press of the button below.\n\nThe default is the left stick pressed in (LS, L3 on PlayStation)."},
+    {"id": "press_button", "type": "key", "device": "pad", "default": 267, "context": "gameplay", "conflict": "warn",
      "label": "Press button",
-     "description": "The button to press while holding the one above. All the way left turns the controller hotkey off.\n\nThe default is the right stick pressed in (RS, R3 on PlayStation).\n\nIn a mission, the first press asks. Then hold the buttons for 5 seconds to abandon the mission and fast travel.\n\nWorks with Xbox controllers, most PC controllers, and DualSense and DualShock 4 controllers, with or without Steam Input."}
+     "description": "The button to press while holding the one above. Unbound turns the controller hotkey off.\n\nThe default is the right stick pressed in (RS, R3 on PlayStation).\n\nIn a mission, the first press asks. Then hold the buttons for 5 seconds to abandon the mission and fast travel.\n\nWorks with Xbox controllers, most PC controllers, and DualSense and DualShock 4 controllers, with or without Steam Input."}
   ]
 }
